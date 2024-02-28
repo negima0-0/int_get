@@ -2,8 +2,9 @@ from netmiko import ConnectHandler
 import paramiko
 import json
 import datetime
-import xlsxwriter
 import csv
+import openpyxl
+from openpyxl import load_workbook
 
 def extract_interface_data(json_output):
     interface_data = []
@@ -18,24 +19,18 @@ def extract_interface_data(json_output):
     return interface_data
 
 def write_to_excel(data, filename, hostname):
-    workbook = xlsxwriter.Workbook(filename)
-    worksheet = workbook.add_worksheet()
+    try:
+        workbook = load_workbook(filename)
+        worksheet = workbook.active
+    except FileNotFoundError:
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.append(['Date', 'Hostname', 'Multicast (RX)', 'Multicast (TX)', 'Broadcast (RX)', 'Broadcast (TX)'])
 
-    # Write headers
-    headers = ['Date', 'Hostname', 'Multicast (RX)', 'Multicast (TX)', 'Broadcast (RX)', 'Broadcast (TX)']
-    for col, header in enumerate(headers):
-        worksheet.write(0, col, header)
+    for row, (name, multicast_in, multicast_out, broadcast_in, broadcast_out) in enumerate(data, start=2):
+        worksheet.append([datetime.date.today().strftime('%Y-%m-%d'), hostname, multicast_in, multicast_out, broadcast_in, broadcast_out])
 
-    # Write data
-    for row, (name, multicast_in, multicast_out, broadcast_in, broadcast_out) in enumerate(data, start=1):
-        worksheet.write(row, 0, datetime.date.today().strftime('%Y-%m-%d'))
-        worksheet.write(row, 1, hostname)
-        worksheet.write(row, 2, multicast_in)
-        worksheet.write(row, 3, multicast_out)
-        worksheet.write(row, 4, broadcast_in)
-        worksheet.write(row, 5, broadcast_out)
-
-    workbook.close()
+    workbook.save(filename)
 
 def main():
     # CSVファイルからホストの情報を読み取る
@@ -65,7 +60,7 @@ def main():
             output = ssh.send_command('show interface extensive | display json')
 
         interface_data = extract_interface_data(output)
-        write_to_excel(interface_data, f'{hostname or ip}_interface_stats.xlsx', hostname or ip)
+        write_to_excel(interface_data, 'interface_stats.xlsx', hostname or ip)
         print(f"Completed processing host: {hostname or ip}")
 
 if __name__ == "__main__":
